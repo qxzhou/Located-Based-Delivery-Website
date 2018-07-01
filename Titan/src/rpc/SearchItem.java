@@ -2,16 +2,25 @@ package rpc;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import db.DBConnection;
+import db.DBConnectionFactory;
+import entity.Item;
+import external.TicketMasterAPI;
 
 /**
  * Servlet implementation class SearchItem
@@ -32,48 +41,43 @@ public class SearchItem extends HttpServlet {
 	 * @see HttpServlet#doGet(HttpServletRequest request, HttpServletResponse response)
 	 */
 	protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-		response.addHeader("Access-Control-Allow-Origin","*");     //所有人都可以访问search的service
-//		response.setContentType("text/html");
-		response.setContentType("application/json");
-		
-		PrintWriter out= response.getWriter();
-		
-//		if (request.getParameter("username") != null) {
-//			String username = request.getParameter("username");
-//			out.print("Hello " + username);
-//		}
-		
-//		out.println("<html><body>");
-//		out.println("<h1>This is a html page</h1>");
-//		out.println("</body></html>");
-		
-//		String username = "";
-//		if (request.getParameter("username") != null) {
-//			username = request.getParameter("username");
-//		}
+		// allow access only if session exists
+		HttpSession session = request.getSession(false);
+		if (session == null) {
+			response.setStatus(403);
+			return;
+		}
+		String userId = session.getAttribute("user_id").toString();
+
 		
 		
-//		JSONObject obj = new JSONObject();
-//		try {
-//			obj.put("username", username);
-//		} catch (JSONException e) {
-//			e.printStackTrace();
-//		}
-//		
-//		out.print(obj);
-//		
-		JSONArray array = new JSONArray();
+		double lat = Double.parseDouble(request.getParameter("lat"));
+		double lon = Double.parseDouble(request.getParameter("lon"));
+		// Term can be empty or null.
+		String term = request.getParameter("term");
+//		String userId = request.getParameter("user_id");
+
+		DBConnection connection = DBConnectionFactory.getDBConnection();
+		List<Item> items = connection.searchItems(lat, lon, term);
+		List<JSONObject> list = new ArrayList<>();
+
+		Set<String> favorite = connection.getFavoriteItemIds(userId);
 		try {
-			array.put(new JSONObject().put("username","abcd"));
-			array.put(new JSONObject().put("username", "1234"));
-		} catch (JSONException e) {
+			for (Item item : items) {
+				// Add a thin version of restaurant object
+				JSONObject obj = item.toJSONObject();
+				// Check if this is a favorite one.
+				// This field is required by frontend to correctly display favorite items.
+//				obj.put("favorite", favorite.contains(item.getItemId()));
+
+				list.add(obj);
+			}
+		} catch (Exception e) {
 			e.printStackTrace();
 		}
-		
-		out.print(array);
-		
-		out.flush();   //表示内容已经写完，需要tomcat返回给前端
-		out.close();		//关闭内存
+		JSONArray array = new JSONArray(list);
+		RpcHelper.writeJsonArray(response, array);
+
 		
 	}
 
